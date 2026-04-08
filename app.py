@@ -248,7 +248,7 @@ if executar_analise:
             if not df_pagamentos_campanha.empty:
 
                 # ALTERAÇÃO: gráficos lado a lado — pagamentos por dia e por canal de pagamento
-                col_graf1, col_graf2 = st.columns(2)
+                col_graf1, = st.columns(1)
 
                 with col_graf1:
                     st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
@@ -268,6 +268,8 @@ if executar_analise:
                     )
                     fig_dias.update_layout(xaxis_title="Dias Após o Envio", yaxis_title="Valor Total Pago (R$)")
                     st.plotly_chart(fig_dias, use_container_width=True)
+
+                col_graf2 = st.columns(1)
 
                 with col_graf2:
                     # ALTERAÇÃO: gráfico de valor arrecadado por canal de pagamento
