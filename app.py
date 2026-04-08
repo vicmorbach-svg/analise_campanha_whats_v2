@@ -100,8 +100,7 @@ def load_and_process_clientes(uploaded_file):
         df_clientes = df[['TELEFONE', 'MATRICULA', 'SITUACAO']].copy()
         df_clientes.rename(columns={
             'TELEFONE': 'TELEFONE_CLIENTE',
-            'MATRICULA': 'MATRICULA_CLIENTE',
-            'SITUACAO': 'DIVIDA'
+            'MATRICULA': 'MATRICULA_CLIENTE'
         }, inplace=True)
 
         df_clientes['TELEFONE_CLIENTE'] = df_clientes['TELEFONE_CLIENTE'].astype(str).str.replace(r'^55', '', regex=True).str.replace(r'\.0$', '', regex=True)
@@ -109,9 +108,8 @@ def load_and_process_clientes(uploaded_file):
 
         df_clientes['MATRICULA_CLIENTE'] = df_clientes['MATRICULA_CLIENTE'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-        # Converter DIVIDA para numérico tratando vírgula como decimal
-        df_clientes['DIVIDA'] = df_clientes['DIVIDA'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
-        df_clientes['DIVIDA'] = pd.to_numeric(df_clientes['DIVIDA'], errors='coerce').fillna(0)
+        # Manter SITUACAO como está para o cálculo da dívida
+        df_clientes['SITUACAO'] = pd.to_numeric(df_clientes['SITUACAO'], errors='coerce').fillna(0)
 
         df_clientes.drop_duplicates(subset=['TELEFONE_CLIENTE', 'MATRICULA_CLIENTE'], inplace=True)
 
@@ -159,15 +157,23 @@ if executar_analise:
     if df_envios is not None and df_pagamentos is not None and df_clientes is not None:
         st.subheader("Processando e Cruzando Dados...")
 
-        # CORREÇÃO 1: total de clientes notificados = telefones únicos direto do df_envios,
-        # sem depender de cruzamento com nenhuma outra base
+        # Total de clientes notificados = telefones únicos direto do df_envios
         total_clientes_notificados = df_envios['TELEFONE_ENVIO'].nunique()
 
-        # CORREÇÃO 2: total da dívida dos notificados = cruzar os telefones do df_envios
-        # com df_clientes e somar DIVIDA dos clientes encontrados (sem depender do merge principal)
-        telefones_notificados = df_envios['TELEFONE_ENVIO'].unique()
-        df_divida_notificados = df_clientes[df_clientes['TELEFONE_CLIENTE'].isin(telefones_notificados)].copy()
-        total_divida_notificados = df_divida_notificados['DIVIDA'].sum()
+        # CORREÇÃO: Total da dívida dos notificados
+        # Para cada telefone único do df_envios, busca na base de clientes e soma SITUACAO
+        # Passo 1: pegar telefones únicos da base de envios
+        df_telefones_unicos_envios = df_envios[['TELEFONE_ENVIO']].drop_duplicates()
+        # Passo 2: fazer o merge com a base de clientes pelo telefone
+        df_lookup_divida = pd.merge(
+            df_telefones_unicos_envios,
+            df_clientes[['TELEFONE_CLIENTE', 'SITUACAO']],
+            left_on='TELEFONE_ENVIO',
+            right_on='TELEFONE_CLIENTE',
+            how='left'
+        )
+        # Passo 3: somar os valores de SITUACAO encontrados
+        total_divida_notificados = df_lookup_divida['SITUACAO'].sum()
 
         # 1. Cruzar Envios com Clientes para obter a Matrícula
         df_campanha = pd.merge(
