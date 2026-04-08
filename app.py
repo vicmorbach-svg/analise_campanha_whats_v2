@@ -248,7 +248,7 @@ if executar_analise:
             if not df_pagamentos_campanha.empty:
 
                 # ALTERAÇÃO: gráficos lado a lado — pagamentos por dia e por canal de pagamento
-                col_graf1, = st.columns(1)
+                col_graf1 = st.columns(1)
 
                 with col_graf1:
                     st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
