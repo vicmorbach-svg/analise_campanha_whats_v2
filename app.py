@@ -68,8 +68,7 @@ def load_and_process_pagamentos(uploaded_file):
             st.sidebar.error(f"Arquivo de Pagamentos: Esperava pelo menos 10 colunas, mas encontrou {df.shape[1]}.")
             return None
 
-        # ALTERAÇÃO: incluir índice 18 para capturar a coluna Tipo Pagamento
-        # Verificar se a coluna de índice 18 existe no arquivo
+        # Incluir índice 18 para capturar a coluna Tipo Pagamento
         col_indices = [0, 6, 9]
         col_names = ['MATRICULA_PAGAMENTO', 'DATA_PAGAMENTO', 'VALOR_PAGO']
 
@@ -89,7 +88,6 @@ def load_and_process_pagamentos(uploaded_file):
         df_pagamentos['VALOR_PAGO'] = pd.to_numeric(df_pagamentos['VALOR_PAGO'], errors='coerce')
         df_pagamentos.dropna(subset=['VALOR_PAGO'], inplace=True)
 
-        # Limpar a coluna TIPO_PAGAMENTO se ela existir
         if 'TIPO_PAGAMENTO' in df_pagamentos.columns:
             df_pagamentos['TIPO_PAGAMENTO'] = df_pagamentos['TIPO_PAGAMENTO'].astype(str).str.strip()
             df_pagamentos['TIPO_PAGAMENTO'] = df_pagamentos['TIPO_PAGAMENTO'].replace('nan', 'Não informado')
@@ -247,57 +245,52 @@ if executar_analise:
 
             if not df_pagamentos_campanha.empty:
 
-                # ALTERAÇÃO: gráficos lado a lado — pagamentos por dia e por canal de pagamento
-                
-                
-            		st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
+                # Gráfico 1: pagamentos por dia após o envio
+                st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
 
-                    df_pagamentos_campanha['DIAS_APOS_ENVIO'] = (df_pagamentos_campanha['DATA_PAGAMENTO'] - df_pagamentos_campanha['DATA_ENVIO']).dt.days
+                df_pagamentos_campanha['DIAS_APOS_ENVIO'] = (df_pagamentos_campanha['DATA_PAGAMENTO'] - df_pagamentos_campanha['DATA_ENVIO']).dt.days
 
-                    pagamentos_por_dia = df_pagamentos_campanha.groupby('DIAS_APOS_ENVIO')['VALOR_PAGO'].sum().reset_index()
-                    pagamentos_por_dia.rename(columns={'DIAS_APOS_ENVIO': 'Dias Após Envio', 'VALOR_PAGO': 'Valor Total Pago'}, inplace=True)
+                pagamentos_por_dia = df_pagamentos_campanha.groupby('DIAS_APOS_ENVIO')['VALOR_PAGO'].sum().reset_index()
+                pagamentos_por_dia.rename(columns={'DIAS_APOS_ENVIO': 'Dias Após Envio', 'VALOR_PAGO': 'Valor Total Pago'}, inplace=True)
 
-                    fig_dias = px.bar(
-                        pagamentos_por_dia,
-                        x='Dias Após Envio',
+                fig_dias = px.bar(
+                    pagamentos_por_dia,
+                    x='Dias Após Envio',
+                    y='Valor Total Pago',
+                    title='Valor Arrecadado por Dia Após o Envio',
+                    labels={'Dias Após Envio': 'Dias Após o Envio', 'Valor Total Pago': 'Valor Total Pago (R$)'},
+                    hover_data={'Valor Total Pago': ':.2f'}
+                )
+                fig_dias.update_layout(xaxis_title="Dias Após o Envio", yaxis_title="Valor Total Pago (R$)")
+                st.plotly_chart(fig_dias, use_container_width=True)
+
+                # Gráfico 2: valor arrecadado por canal de pagamento
+                if 'TIPO_PAGAMENTO' in df_pagamentos_campanha.columns:
+                    st.subheader("Valor Arrecadado por Canal de Pagamento")
+
+                    pagamentos_por_canal = df_pagamentos_campanha.groupby('TIPO_PAGAMENTO')['VALOR_PAGO'].sum().reset_index()
+                    pagamentos_por_canal.rename(columns={'TIPO_PAGAMENTO': 'Canal de Pagamento', 'VALOR_PAGO': 'Valor Total Pago'}, inplace=True)
+                    pagamentos_por_canal = pagamentos_por_canal.sort_values('Valor Total Pago', ascending=False)
+
+                    fig_canal = px.bar(
+                        pagamentos_por_canal,
+                        x='Canal de Pagamento',
                         y='Valor Total Pago',
-                        title='Valor Arrecadado por Dia Após o Envio',
-                        labels={'Dias Após Envio': 'Dias Após o Envio', 'Valor Total Pago': 'Valor Total Pago (R$)'},
-                        hover_data={'Valor Total Pago': ':.2f'}
+                        title='Valor Arrecadado por Canal de Pagamento',
+                        labels={'Canal de Pagamento': 'Canal de Pagamento', 'Valor Total Pago': 'Valor Total Pago (R$)'},
+                        hover_data={'Valor Total Pago': ':.2f'},
+                        color='Canal de Pagamento'
                     )
-                    fig_dias.update_layout(xaxis_title="Dias Após o Envio", yaxis_title="Valor Total Pago (R$)")
-                    st.plotly_chart(fig_dias, use_container_width=True)
-                
-                
-                    # ALTERAÇÃO: gráfico de valor arrecadado por canal de pagamento
-                    if 'TIPO_PAGAMENTO' in df_pagamentos_campanha.columns:
-                        st.subheader("Valor Arrecadado por Canal de Pagamento")
+                    fig_canal.update_layout(
+                        xaxis_title="Canal de Pagamento",
+                        yaxis_title="Valor Total Pago (R$)",
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig_canal, use_container_width=True)
 
-                        pagamentos_por_canal = df_pagamentos_campanha.groupby('TIPO_PAGAMENTO')['VALOR_PAGO'].sum().reset_index()
-                        pagamentos_por_canal.rename(columns={'TIPO_PAGAMENTO': 'Canal de Pagamento', 'VALOR_PAGO': 'Valor Total Pago'}, inplace=True)
-                        pagamentos_por_canal = pagamentos_por_canal.sort_values('Valor Total Pago', ascending=False)
+                # Tabela de detalhes
+                st.subheader("Detalhes dos Pagamentos Atribuídos à Campanha")
 
-                        fig_canal = px.bar(
-                            pagamentos_por_canal,
-                            x='Canal de Pagamento',
-                            y='Valor Total Pago',
-                            title='Valor Arrecadado por Canal de Pagamento',
-                            labels={'Canal de Pagamento': 'Canal de Pagamento', 'Valor Total Pago': 'Valor Total Pago (R$)'},
-                            hover_data={'Valor Total Pago': ':.2f'},
-                            color='Canal de Pagamento'
-                        )
-                        fig_canal.update_layout(
-                            xaxis_title="Canal de Pagamento",
-                            yaxis_title="Valor Total Pago (R$)",
-                            showlegend=False
-                        )
-                        st.plotly_chart(fig_canal, use_container_width=True)
-                    else:
-                        st.info("Coluna 'Tipo Pagamento' não encontrada no arquivo de pagamentos.")
-
-		                st.subheader("Detalhes dos Pagamentos Atribuídos à Campanha")
-
-                # Colunas para exibição, incluindo TIPO_PAGAMENTO se disponível
                 colunas_exibicao = ['MATRICULA', 'TELEFONE_ENVIO', 'DATA_ENVIO', 'DATA_PAGAMENTO', 'VALOR_PAGO', 'DIAS_APOS_ENVIO']
                 if 'TIPO_PAGAMENTO' in df_pagamentos_campanha.columns:
                     colunas_exibicao.append('TIPO_PAGAMENTO')
