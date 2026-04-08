@@ -250,7 +250,7 @@ if executar_analise:
                 # ALTERAÇÃO: gráficos lado a lado — pagamentos por dia e por canal de pagamento
                 
                 
-            				st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
+            		st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
 
                     df_pagamentos_campanha['DIAS_APOS_ENVIO'] = (df_pagamentos_campanha['DATA_PAGAMENTO'] - df_pagamentos_campanha['DATA_ENVIO']).dt.days
 
