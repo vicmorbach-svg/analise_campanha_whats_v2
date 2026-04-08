@@ -250,7 +250,7 @@ if executar_analise:
                 # ALTERAÇÃO: gráficos lado a lado — pagamentos por dia e por canal de pagamento
                 
                 
-                    st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
+            				st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
 
                     df_pagamentos_campanha['DIAS_APOS_ENVIO'] = (df_pagamentos_campanha['DATA_PAGAMENTO'] - df_pagamentos_campanha['DATA_ENVIO']).dt.days
 
@@ -295,7 +295,7 @@ if executar_analise:
                     else:
                         st.info("Coluna 'Tipo Pagamento' não encontrada no arquivo de pagamentos.")
 
-                st.subheader("Detalhes dos Pagamentos Atribuídos à Campanha")
+		                st.subheader("Detalhes dos Pagamentos Atribuídos à Campanha")
 
                 # Colunas para exibição, incluindo TIPO_PAGAMENTO se disponível
                 colunas_exibicao = ['MATRICULA', 'TELEFONE_ENVIO', 'DATA_ENVIO', 'DATA_PAGAMENTO', 'VALOR_PAGO', 'DIAS_APOS_ENVIO']
