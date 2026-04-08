@@ -68,8 +68,17 @@ def load_and_process_pagamentos(uploaded_file):
             st.sidebar.error(f"Arquivo de Pagamentos: Esperava pelo menos 10 colunas, mas encontrou {df.shape[1]}.")
             return None
 
-        df_pagamentos = df.iloc[:, [0, 6, 9]].copy()
-        df_pagamentos.columns = ['MATRICULA_PAGAMENTO', 'DATA_PAGAMENTO', 'VALOR_PAGO']
+        # ALTERAÇÃO: incluir índice 18 para capturar a coluna Tipo Pagamento
+        # Verificar se a coluna de índice 18 existe no arquivo
+        col_indices = [0, 6, 9]
+        col_names = ['MATRICULA_PAGAMENTO', 'DATA_PAGAMENTO', 'VALOR_PAGO']
+
+        if df.shape[1] > 18:
+            col_indices.append(18)
+            col_names.append('TIPO_PAGAMENTO')
+
+        df_pagamentos = df.iloc[:, col_indices].copy()
+        df_pagamentos.columns = col_names
 
         df_pagamentos['MATRICULA_PAGAMENTO'] = df_pagamentos['MATRICULA_PAGAMENTO'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
@@ -79,6 +88,11 @@ def load_and_process_pagamentos(uploaded_file):
         df_pagamentos['VALOR_PAGO'] = df_pagamentos['VALOR_PAGO'].astype(str).str.replace('.', '', regex=False).str.replace(',', '.', regex=False)
         df_pagamentos['VALOR_PAGO'] = pd.to_numeric(df_pagamentos['VALOR_PAGO'], errors='coerce')
         df_pagamentos.dropna(subset=['VALOR_PAGO'], inplace=True)
+
+        # Limpar a coluna TIPO_PAGAMENTO se ela existir
+        if 'TIPO_PAGAMENTO' in df_pagamentos.columns:
+            df_pagamentos['TIPO_PAGAMENTO'] = df_pagamentos['TIPO_PAGAMENTO'].astype(str).str.strip()
+            df_pagamentos['TIPO_PAGAMENTO'] = df_pagamentos['TIPO_PAGAMENTO'].replace('nan', 'Não informado')
 
         st.sidebar.success("Arquivo de Pagamentos processado com sucesso!")
         return df_pagamentos
@@ -108,7 +122,6 @@ def load_and_process_clientes(uploaded_file):
 
         df_clientes['MATRICULA_CLIENTE'] = df_clientes['MATRICULA_CLIENTE'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
 
-        # Manter SITUACAO como está para o cálculo da dívida
         df_clientes['SITUACAO'] = pd.to_numeric(df_clientes['SITUACAO'], errors='coerce').fillna(0)
 
         df_clientes.drop_duplicates(subset=['TELEFONE_CLIENTE', 'MATRICULA_CLIENTE'], inplace=True)
@@ -160,11 +173,8 @@ if executar_analise:
         # Total de clientes notificados = telefones únicos direto do df_envios
         total_clientes_notificados = df_envios['TELEFONE_ENVIO'].nunique()
 
-        # CORREÇÃO: Total da dívida dos notificados
-        # Para cada telefone único do df_envios, busca na base de clientes e soma SITUACAO
-        # Passo 1: pegar telefones únicos da base de envios
+        # Total da dívida dos notificados
         df_telefones_unicos_envios = df_envios[['TELEFONE_ENVIO']].drop_duplicates()
-        # Passo 2: fazer o merge com a base de clientes pelo telefone
         df_lookup_divida = pd.merge(
             df_telefones_unicos_envios,
             df_clientes[['TELEFONE_CLIENTE', 'SITUACAO']],
@@ -172,7 +182,6 @@ if executar_analise:
             right_on='TELEFONE_CLIENTE',
             how='left'
         )
-        # Passo 3: somar os valores de SITUACAO encontrados
         total_divida_notificados = df_lookup_divida['SITUACAO'].sum()
 
         # 1. Cruzar Envios com Clientes para obter a Matrícula
@@ -185,7 +194,6 @@ if executar_analise:
         )
 
         df_campanha.dropna(subset=['MATRICULA_CLIENTE'], inplace=True)
-
         df_campanha.rename(columns={'MATRICULA_CLIENTE': 'MATRICULA'}, inplace=True)
         df_campanha.drop(columns=['TELEFONE_CLIENTE'], inplace=True)
 
@@ -210,13 +218,9 @@ if executar_analise:
             ].copy()
 
             clientes_que_pagaram_matriculas = df_pagamentos_campanha['MATRICULA'].nunique()
-
             valor_total_arrecadado = df_pagamentos_campanha['VALOR_PAGO'].sum() if not df_pagamentos_campanha.empty else 0
-
             taxa_eficiencia_clientes = (clientes_que_pagaram_matriculas / total_clientes_notificados * 100) if total_clientes_notificados > 0 else 0
-
             taxa_eficiencia_valor = (valor_total_arrecadado / total_divida_notificados * 100) if total_divida_notificados > 0 else 0
-
             ticket_medio = (valor_total_arrecadado / clientes_que_pagaram_matriculas) if clientes_que_pagaram_matriculas > 0 else 0
 
             st.subheader("Resultados da Análise da Campanha")
@@ -242,28 +246,66 @@ if executar_analise:
                 st.metric(label="Taxa de eficiência (valor)", value=f"{taxa_eficiencia_valor:,.2f}%".replace(",", "X").replace(".", ",").replace("X", "."))
 
             if not df_pagamentos_campanha.empty:
-                st.subheader(f"Pagamentos por Dia Após o Envio da Notificação (Janela de {janela_dias} dias)")
 
-                df_pagamentos_campanha['DIAS_APOS_ENVIO'] = (df_pagamentos_campanha['DATA_PAGAMENTO'] - df_pagamentos_campanha['DATA_ENVIO']).dt.days
+                # ALTERAÇÃO: gráficos lado a lado — pagamentos por dia e por canal de pagamento
+                col_graf1, col_graf2 = st.columns(2)
 
-                pagamentos_por_dia = df_pagamentos_campanha.groupby('DIAS_APOS_ENVIO')['VALOR_PAGO'].sum().reset_index()
-                pagamentos_por_dia.rename(columns={'DIAS_APOS_ENVIO': 'Dias Após Envio', 'VALOR_PAGO': 'Valor Total Pago'}, inplace=True)
+                with col_graf1:
+                    st.subheader(f"Pagamentos por Dia Após o Envio (Janela de {janela_dias} dias)")
 
-                fig = px.bar(
-                    pagamentos_por_dia,
-                    x='Dias Após Envio',
-                    y='Valor Total Pago',
-                    title='Valor Total Pago por Dia Após o Envio da Notificação',
-                    labels={'Dias Após Envio': 'Dias Após o Envio da Notificação', 'Valor Total Pago': 'Valor Total Pago (R$)'},
-                    hover_data={'Valor Total Pago': ':.2f'}
-                )
-                fig.update_layout(xaxis_title="Dias Após o Envio da Notificação", yaxis_title="Valor Total Pago (R$)")
-                st.plotly_chart(fig, use_container_width=True)
+                    df_pagamentos_campanha['DIAS_APOS_ENVIO'] = (df_pagamentos_campanha['DATA_PAGAMENTO'] - df_pagamentos_campanha['DATA_ENVIO']).dt.days
+
+                    pagamentos_por_dia = df_pagamentos_campanha.groupby('DIAS_APOS_ENVIO')['VALOR_PAGO'].sum().reset_index()
+                    pagamentos_por_dia.rename(columns={'DIAS_APOS_ENVIO': 'Dias Após Envio', 'VALOR_PAGO': 'Valor Total Pago'}, inplace=True)
+
+                    fig_dias = px.bar(
+                        pagamentos_por_dia,
+                        x='Dias Após Envio',
+                        y='Valor Total Pago',
+                        title='Valor Arrecadado por Dia Após o Envio',
+                        labels={'Dias Após Envio': 'Dias Após o Envio', 'Valor Total Pago': 'Valor Total Pago (R$)'},
+                        hover_data={'Valor Total Pago': ':.2f'}
+                    )
+                    fig_dias.update_layout(xaxis_title="Dias Após o Envio", yaxis_title="Valor Total Pago (R$)")
+                    st.plotly_chart(fig_dias, use_container_width=True)
+
+                with col_graf2:
+                    # ALTERAÇÃO: gráfico de valor arrecadado por canal de pagamento
+                    if 'TIPO_PAGAMENTO' in df_pagamentos_campanha.columns:
+                        st.subheader("Valor Arrecadado por Canal de Pagamento")
+
+                        pagamentos_por_canal = df_pagamentos_campanha.groupby('TIPO_PAGAMENTO')['VALOR_PAGO'].sum().reset_index()
+                        pagamentos_por_canal.rename(columns={'TIPO_PAGAMENTO': 'Canal de Pagamento', 'VALOR_PAGO': 'Valor Total Pago'}, inplace=True)
+                        pagamentos_por_canal = pagamentos_por_canal.sort_values('Valor Total Pago', ascending=False)
+
+                        fig_canal = px.bar(
+                            pagamentos_por_canal,
+                            x='Canal de Pagamento',
+                            y='Valor Total Pago',
+                            title='Valor Arrecadado por Canal de Pagamento',
+                            labels={'Canal de Pagamento': 'Canal de Pagamento', 'Valor Total Pago': 'Valor Total Pago (R$)'},
+                            hover_data={'Valor Total Pago': ':.2f'},
+                            color='Canal de Pagamento'
+                        )
+                        fig_canal.update_layout(
+                            xaxis_title="Canal de Pagamento",
+                            yaxis_title="Valor Total Pago (R$)",
+                            showlegend=False
+                        )
+                        st.plotly_chart(fig_canal, use_container_width=True)
+                    else:
+                        st.info("Coluna 'Tipo Pagamento' não encontrada no arquivo de pagamentos.")
 
                 st.subheader("Detalhes dos Pagamentos Atribuídos à Campanha")
-                df_detalhes_pagamentos = df_pagamentos_campanha[[
-                    'MATRICULA', 'TELEFONE_ENVIO', 'DATA_ENVIO', 'DATA_PAGAMENTO', 'VALOR_PAGO', 'DIAS_APOS_ENVIO'
-                ]].drop_duplicates(subset=['MATRICULA', 'DATA_PAGAMENTO', 'VALOR_PAGO'])
+
+                # Colunas para exibição, incluindo TIPO_PAGAMENTO se disponível
+                colunas_exibicao = ['MATRICULA', 'TELEFONE_ENVIO', 'DATA_ENVIO', 'DATA_PAGAMENTO', 'VALOR_PAGO', 'DIAS_APOS_ENVIO']
+                if 'TIPO_PAGAMENTO' in df_pagamentos_campanha.columns:
+                    colunas_exibicao.append('TIPO_PAGAMENTO')
+
+                df_detalhes_pagamentos = df_pagamentos_campanha[colunas_exibicao].drop_duplicates(
+                    subset=['MATRICULA', 'DATA_PAGAMENTO', 'VALOR_PAGO']
+                )
 
                 st.dataframe(df_detalhes_pagamentos)
 
